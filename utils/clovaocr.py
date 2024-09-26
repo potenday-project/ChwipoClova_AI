@@ -1,9 +1,13 @@
+import asyncio
 import json
 import os
+import re
 import time
 import uuid
 
 import requests
+
+from utils.url2pdf import get_pdf
 
 
 class FILE_OCR:
@@ -17,7 +21,7 @@ class FILE_OCR:
 
     def file_convert_txt(self, file_path, is_save=False):
         file_name = os.path.basename(file_path)
-        ext = os.path.splitext(file_path)[-1].replace(".","")
+        ext = os.path.splitext(file_path)[-1].replace(".", "")
         request_json = {
             "images": [{"format": ext, "name": file_name}],
             "requestId": str(uuid.uuid4()),
@@ -29,9 +33,11 @@ class FILE_OCR:
         files = [("file", open(file_path, "rb"))]
         headers = {"X-OCR-SECRET": self.secret_key}
 
-        response = requests.request("POST", self.api_url, headers=headers, data=payload, files=files)
+        response = requests.request(
+            "POST", self.api_url, headers=headers, data=payload, files=files
+        )
 
-        json_file = os.path.join("results",file_name.replace(ext, "json"))
+        json_file = os.path.join("results", file_name.replace(ext, "json"))
         if is_save:
             with open(json_file, "w") as jf:
                 json.dump(response.json(), jf)
@@ -42,20 +48,20 @@ class FILE_OCR:
             js = response.json()
 
         text = []
-        for image in js['images']:
-            for filed in image['fields']:
-                text.append(filed['inferText'])
-        
+        for image in js["images"]:
+            for filed in image["fields"]:
+                text.append(filed["inferText"])
+
         txt_file = os.path.join("results", file_name.replace(ext, "txt"))
         if is_save:
-            with open(txt_file, 'w') as txt:
+            with open(txt_file, "w") as txt:
                 txt.write(" ".join(text))
         return " ".join(text)
-    
+
     def byte_convert_txt(self, file_byte, is_save=False):
         file_name = file_byte.filename
-        print(file_name)
-        ext = os.path.splitext(file_name)[-1].replace(".","")
+        # print(file_name)
+        ext = os.path.splitext(file_name)[-1].replace(".", "")
 
         request_json = {
             "images": [{"format": ext, "name": file_name}],
@@ -68,9 +74,11 @@ class FILE_OCR:
         files = [("file", file_byte.stream.read())]
         headers = {"X-OCR-SECRET": self.secret_key}
 
-        response = requests.request("POST", self.api_url, headers=headers, data=payload, files=files)
+        response = requests.request(
+            "POST", self.api_url, headers=headers, data=payload, files=files
+        )
 
-        json_file = os.path.join("results",file_name.replace(ext, "json"))
+        json_file = os.path.join("results", file_name.replace(ext, "json"))
         if is_save:
             with open(json_file, "w") as jf:
                 json.dump(response.json(), jf)
@@ -79,18 +87,63 @@ class FILE_OCR:
                 js = json.load(jf)
         else:
             js = response.json()
-        print(js)
+        # print(js)
+        # print(js)
         text = []
-        for image in js['images']:
-            for filed in image['fields']:
-                text.append(filed['inferText'])
-        
+        for image in js["images"]:
+            for filed in image["fields"]:
+                text.append(filed["inferText"])
+
         txt_file = os.path.join("results", file_name.replace(ext, "txt"))
         if is_save:
-            with open(txt_file, 'w') as txt:
+            with open(txt_file, "w") as txt:
                 txt.write(" ".join(text))
         return " ".join(text)
 
+    def url_convert_txt(self, url, is_save=False):
+        file_byte = asyncio.run(get_pdf(url))
+        file_name = re.sub("[^a-zA-Z0-9]", "", str(url))
+        # print(file_name)
+        ext = "pdf"
+
+        request_json = {
+            "images": [{"format": ext, "name": file_name}],
+            "requestId": str(uuid.uuid4()),
+            "version": "V2",
+            "timestamp": int(round(time.time() * 1000)),
+        }
+
+        payload = {"message": json.dumps(request_json).encode("UTF-8")}
+        files = [("file", file_byte)]
+        headers = {"X-OCR-SECRET": self.secret_key}
+
+        response = requests.request(
+            "POST", self.api_url, headers=headers, data=payload, files=files
+        )
+
+        json_file = os.path.join("results", file_name + ".json")
+        if is_save:
+            with open(json_file, "w") as jf:
+                json.dump(response.json(), jf)
+
+            with open(json_file, "r") as jf:
+                js = json.load(jf)
+        else:
+            js = response.json()
+        # print(js)
+        # print(js)
+        text = []
+        for image in js["images"]:
+            for filed in image["fields"]:
+                text.append(filed["inferText"])
+
+        txt_file = os.path.join("results", file_name + ".txt")
+        if is_save:
+            with open(txt_file, "w") as txt:
+                txt.write(" ".join(text))
+        return " ".join(text)
+
+
 if __name__ == "__main__":
     ocr = FILE_OCR()
-    ocr.convert_txt('results/ocr_test.png',True)
+    ocr.convert_txt("results/ocr_test.png", True)
